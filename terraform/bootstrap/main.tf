@@ -183,8 +183,8 @@ data "aws_iam_policy_document" "tf_apply_trust" {
       variable = "token.actions.githubusercontent.com:sub"
 
       values = [
-        "repo:${local.github_subject_prefix}:environment:infra-apply",
-        "repo:${local.github_subject_prefix}:environment:infra-destroy"
+        "${local.github_subject_prefix}:environment:infra-apply",
+        "${local.github_subject_prefix}:environment:infra-destroy"
       ]
     }
   }
@@ -525,6 +525,8 @@ data "aws_iam_policy_document" "tf_apply_permissions" {
         "arn:aws:iam::aws:policy/ReadOnlyAccess",
         "arn:aws:iam::aws:policy/AmazonEKS*",
         "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+        "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly",
+        "arn:aws:iam::aws:policy/AmazonEBSCSIDriverPolicy",
       local.project_policy_arn]
     }
   }
@@ -606,7 +608,8 @@ data "aws_iam_policy_document" "ecr_push_permissions" {
       "ecr:UploadLayerPart",
       "ecr:InitiateLayerUpload",
       "ecr:BatchCheckLayerAvailability",
-      "ecr:PutImage"
+      "ecr:PutImage",
+      "ecr:DescribeImages"
     ]
     resources = [for repo in aws_ecr_repository.repos : repo.arn]
   }

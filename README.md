@@ -106,7 +106,7 @@ Once `terraform apply` completes, copy the generated Terraform outputs into your
    | ----- | ----- | ----- | ----- | 
    | `tf_plan_role_arn` | Variables | `AWS_ROLE_TF_PLAN` | IAM Role ARN for PR Planning | 
    | `tf_apply_role_arn` | Variables (Environment: `infra-apply`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Apply | 
-      | `tf_apply_role_arn` | Variables (Environment: `infra-destroy`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Destroy | 
+   | `tf_apply_role_arn` | Variables (Environment: `infra-destroy`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Destroy | 
    | `ecr_push_role_arn` | Variables | `AWS_ROLE_ECR_PUSH` | IAM Role ARN for ECR Container Push | 
    | `ecr_repository_urls` | Variables | `ECR_REPOSITORIES` | Container repository endpoints | 
 

@@ -236,7 +236,7 @@ module "ebs_csi_pod_identity" {
 
   name               = "${local.name_prefix}-ebs-csi"
   use_name_prefix    = false
-  policy_name_prefix = "${local.name_prefix}_ebs_"
+  policy_name_prefix = "${local.name_prefix}-ebs_"
 
   attach_aws_ebs_csi_policy = true
   tags                      = local.common_tags

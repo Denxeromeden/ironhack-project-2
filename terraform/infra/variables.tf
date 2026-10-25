@@ -132,22 +132,6 @@ variable "secrets_recovery_window_days" {
   default     = 0
 }
 
-variable "acme_email" {
-  type        = string
-  description = "Let's Encrypt account email"
-  default     = "email@email.com"
-}
-
-variable "acme_issuer" {
-  type        = string
-  description = "Let's Encrypt issuer type"
-  default     = "letsencrypt-staging"
-  validation {
-    condition     = contains(["letsencrypt-staging", "letsencrypt-prod"], var.acme_issuer)
-    error_message = "Values must be either 'letsencrypt-staging' or 'letsencrypt-prod'"
-  }
-}
-
 variable "additional_cluster_admins" {
   type        = list(string)
   description = "Additional admins to add to the cluster. Default is tf_apply role."

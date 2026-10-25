@@ -31,8 +31,8 @@ locals {
   project_ecr_arn              = "arn:aws:ecr:${local.region}:${local.account_id}:repository/${local.name_prefix}-*"
   project_secret_arn           = "arn:aws:secretsmanager:${local.region}:${local.account_id}:secret:${local.name_prefix}-*"
   project_kms_alias_arn        = "arn:aws:kms:${local.region}:${local.account_id}:alias/${local.name_prefix}-*"
+  project_kms_alias_eks_arn    = "arn:aws:kms:${local.region}:${local.account_id}:alias/eks/${local.name_prefix}-*"
   project_kms_key_arn          = "arn:aws:kms:${local.region}:${data.aws_caller_identity.current.account_id}:key/*"
-
 }
 
 # -----------------------------------------------------------------------------
@@ -132,7 +132,7 @@ resource "aws_iam_role_policy_attachment" "tf_plan_readonly" {
 }
 
 # Define permission policy to access the remote state files
-data "aws_iam_policy_document" "state_bucket_read" {
+data "aws_iam_policy_document" "state_bucket_manage" {
   statement {
     actions = ["s3:GetObject", "s3:ListBucket"]
     resources = [
@@ -140,12 +140,22 @@ data "aws_iam_policy_document" "state_bucket_read" {
       local.state_bucket_arn_wildcard
     ]
   }
+  statement {
+    sid = "ManageTerraformStateObjects"
+
+    actions = [
+      "s3:PutObject",
+      "s3:DeleteObject"
+    ]
+
+    resources = [local.state_bucket_arn_wildcard]
+  }
 }
 
 # Create the actual permission policy
 resource "aws_iam_policy" "tf_plan_state" {
   name   = "${local.name_prefix}-tf-plan-state-policy"
-  policy = data.aws_iam_policy_document.state_bucket_read.json
+  policy = data.aws_iam_policy_document.state_bucket_manage.json
   tags   = local.common_tags
 }
 
@@ -232,7 +242,21 @@ data "aws_iam_policy_document" "tf_apply_permissions" {
 
     resources = [local.state_bucket_arn_wildcard]
   }
+  # ---------------------------------------------------------------------------
+  # SSM
+  # ---------------------------------------------------------------------------
+  statement {
+    sid = "AllowReadingEksOptimizedAmiParameters"
 
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters"
+    ]
+
+    resources = [
+      "arn:aws:ssm:*:*:parameter/aws/service/eks/optimized-ami/*"
+    ]
+  }
   # ---------------------------------------------------------------------------
   # EC2 and EKS
   # ---------------------------------------------------------------------------
@@ -415,6 +439,7 @@ data "aws_iam_policy_document" "tf_apply_permissions" {
 
     resources = [
       local.project_kms_alias_arn,
+      local.project_kms_alias_eks_arn,
       local.project_kms_key_arn
     ]
   }
@@ -445,6 +470,14 @@ data "aws_iam_policy_document" "tf_apply_permissions" {
     local.project_role_arn]
   }
 
+  statement {
+    sid     = "ReadEksNodeGroupServiceLinkedRole"
+    actions = ["iam:GetRole"]
+
+    resources = [
+      "arn:aws:iam::${local.account_id}:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup"
+    ]
+  }
   # ---------------------------------------------------------------------------
   # IAM: project instance profiles
   # ---------------------------------------------------------------------------

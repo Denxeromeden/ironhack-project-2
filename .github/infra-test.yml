@@ -1,0 +1,116 @@
+name: Terraform Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Choose action'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+jobs:
+  plan:
+    if: github.event.inputs.action == 'plan' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/infra
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
+      TF_VAR_env_tag: ${{ vars.ENV_TAG }}
+      TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
+      TF_VAR_additional_cluster_admins: ${{ secrets.ADDITIONAL_CLUSTER_ADMINS }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.TF_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Execute Plan
+        run: terraform plan
+
+  apply:
+    if: github.event.inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    environment: infra-apply
+    defaults:
+      run:
+        working-directory: terraform/infra
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
+      TF_VAR_env_tag: ${{ vars.ENV_TAG }}
+      TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
+      TF_VAR_additional_cluster_admins: ${{ secrets.ADDITIONAL_CLUSTER_ADMINS }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.TF_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Execute Apply
+        run: terraform apply -auto-approve
+
+  destroy:
+    if: github.event.inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: infra-destroy
+    defaults:
+      run:
+        working-directory: terraform/infra
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
+      TF_VAR_env_tag: ${{ vars.ENV_TAG }}
+      TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
+      TF_VAR_additional_cluster_admins: ${{ secrets.ADDITIONAL_CLUSTER_ADMINS }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.TF_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Execute Teardown Script
+        run: ./down.sh

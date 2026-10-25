@@ -1,6 +1,9 @@
 # Run initialization with terraform init -backend-config=../backend.conf (make sure it reflects the bucket name 
 # and region used when creating the backend)
 data "aws_caller_identity" "current" {}
+data "aws_route53_zone" "primary" {
+  name = var.zone_name
+}
 
 locals {
   services                  = ["vote", "result", "worker"]
@@ -268,7 +271,7 @@ data "aws_iam_policy_document" "tf_apply_permissions" {
     ]
 
     resources = [
-      "arn:aws:route53:::hostedzone/${var.route53_zone_id}"
+      "arn:aws:route53:::hostedzone/${data.aws_route53_zone.primary.zone_id}"
     ]
   }
 

@@ -114,7 +114,7 @@ module "eks" {
   kubernetes_version = var.kubernetes_version
 
   create_kms_key = true
-  kms_key_alias  = "alias/${local.name_prefix}-cluster"
+  kms_key_aliases  = ["alias/${local.name_prefix}-cluster"]
 
   endpoint_public_access                   = true
   endpoint_private_access                  = true

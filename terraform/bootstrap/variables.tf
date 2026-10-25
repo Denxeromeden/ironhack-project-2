@@ -69,8 +69,7 @@ variable "github_use_immutable_subject" {
   default     = true
 }
 
-variable "route53_zone_id" {
-  description = "ID of the hosted zone used to reach the app"
+variable "zone_name" {
+  description = "Name of the hosted zone used to reach the app"
   type        = string
-  default     = "Z042372728MB5VI4H04IG"
 }

@@ -54,13 +54,13 @@ variable "manage_oidc_provider" {
 variable "github_owner_id" {
   description = "Numeric ID of the GitHub repository owner"
   type        = string
-  default     = "1431056517"
+  default     = "130655516"
 }
 
 variable "github_repository_id" {
   description = "Numeric ID of the GitHub repository"
   type        = string
-  default     = "130655516"
+  default     = "1431056517"
 }
 
 variable "github_use_immutable_subject" {

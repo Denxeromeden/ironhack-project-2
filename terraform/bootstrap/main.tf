@@ -113,7 +113,7 @@ data "aws_iam_policy_document" "tf_plan_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${local.github_subject_prefix}:pull_request"]
+      values   = ["${local.github_subject_prefix}:pull_request", "${local.github_subject_prefix}:ref:refs/heads/main"]
     }
   }
 }

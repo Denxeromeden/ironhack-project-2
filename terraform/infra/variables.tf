@@ -151,6 +151,7 @@ variable "acme_issuer" {
 variable "additional_cluster_admins" {
   type        = list(string)
   description = "Additional admins to add to the cluster. Default is tf_apply role."
+  default = []
 }
 
 variable "secret_string_version" {

@@ -92,7 +92,7 @@ VPC_ID="$(terraform output -raw vpc_id 2>/dev/null || true)"
 log "Destroying EKS cluster..."
 terraform destroy -input=false -auto-approve "${TF_VARS[@]}" -target=module.eks || true
 
-[[ -n "$VPC_ID" ]] && clgeanup_guardduty "$VPC_ID"
+[[ -n "$VPC_ID" ]] && cleanup_guardduty "$VPC_ID"
 
 log "Destroying remaining infrastructure..."
 terraform destroy -input=false -auto-approve "${TF_VARS[@]}"

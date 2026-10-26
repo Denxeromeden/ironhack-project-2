@@ -13,6 +13,7 @@ aws-load-balancer-controller:
     name: aws-load-balancer-controller
 
 external-secrets:
+  installCRDs: true
   serviceAccount:
     create: true
     name: external-secrets

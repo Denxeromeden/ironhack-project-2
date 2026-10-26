@@ -5,9 +5,7 @@ ngf:
   service:
     type: LoadBalancer
 
-aws-load-balancer-controller:
-  clusterName: "{{ .Values.clusterName }}"
-  region: "{{ .Values.region }}"
+aws-lb-controller:
   serviceAccount:
     create: true
     name: aws-load-balancer-controller

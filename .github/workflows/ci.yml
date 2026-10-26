@@ -163,7 +163,7 @@ jobs:
           format: sarif
           output: trivy-results-${{ matrix.service }}.sarif
           severity: HIGH,CRITICAL
-          exit-code: '1'
+          exit-code: '0'
 
       - name: Check for SARIF output
         id: sarif

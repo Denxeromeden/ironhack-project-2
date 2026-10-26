@@ -19,11 +19,15 @@ spec:
                       whenUnsatisfiable: DoNotSchedule
                       labelSelector:
                         matchLabels:
-                          app.kubernetes.io/name: nginx
+                          gateway.networking.k8s.io/gateway-name: platform-gateway
     service:
       type: LoadBalancer
-      annotations:
-        service.beta.kubernetes.io/aws-load-balancer-type: "external"
-        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
-        service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
-        service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+      patches:
+        - type: StrategicMerge
+          value:
+            metadata:
+              annotations:
+                service.beta.kubernetes.io/aws-load-balancer-type: "external"
+                service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+                service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+                service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"

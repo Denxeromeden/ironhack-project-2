@@ -18,7 +18,7 @@ spec:
         - name: envTag
           value: "{{ .Values.envTag }}"
   destination:
-    server: in-cluster
+    server: 'https://kubernetes.default.svc'
     namespace: kube-system
   syncPolicy:
     automated:

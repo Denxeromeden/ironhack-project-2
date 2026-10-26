@@ -86,6 +86,7 @@ resource "kubernetes_secret_v1" "argocd_cluster_in_cluster" {
       "acme_issuer"  = var.acme_issuer
       "name_prefix"  = local.name_prefix
       "env_tag"      = var.env_tag
+      "repo_url"      = var.repo_url
     }
   }
 
@@ -176,6 +177,10 @@ resource "kubernetes_manifest" "root_applicationset" {
                 {
                   name  = "envTag"
                   value = "{{metadata.annotations.env_tag}}"
+                },
+                {
+                  name  = "repoURL"
+                  value = "{{metadata.annotations.repo_url}}"
                 }
               ]
             }

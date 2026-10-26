@@ -20,8 +20,8 @@ external-secrets:
 
 cert-manager:
   installCRDs: true
-  namespaceOverride: cert-manager
-  fullnameOverride: cert-manager
+  namespace: cert-manager
+  clusterResourceNamespace: cert-manager
   serviceAccount:
     create: true
     name: cert-manager
@@ -32,6 +32,7 @@ cert-manager:
       enabled: true
 
 external-dns:
+  namespaceOverride: external-dns
   provider: aws
   sources:
     - gateway-httproute

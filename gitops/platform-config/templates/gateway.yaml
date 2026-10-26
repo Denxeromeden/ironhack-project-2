@@ -31,7 +31,6 @@ spec:
               kubernetes.io/metadata.name: voting-app # Restricted to app namespace
   addresses:
     - type: IPAddress
-      value: "" # Dynamically filled by the NLB service controller
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

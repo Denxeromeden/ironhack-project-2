@@ -20,6 +20,8 @@ external-secrets:
 
 cert-manager:
   installCRDs: true
+  namespaceOverride: cert-manager
+  fullnameOverride: cert-manager
   serviceAccount:
     create: true
     name: cert-manager

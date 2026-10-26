@@ -31,6 +31,12 @@ spec:
           value: "{{ .Values.acmeEmail }}"
         - name: acmeIssuer
           value: "{{ .Values.acmeIssuer }}"
+        - name: external-dns.txtOwnerId
+          value: "{{ .Values.clusterName }}"
+        - name: "external-dns.domainFilters[0]"
+          value: "{{ .Values.baseDomain }}"
+        - name: region
+          value: "{{ .Values.region }}"
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: kube-system

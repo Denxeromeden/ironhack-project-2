@@ -104,10 +104,10 @@ Once `terraform apply` completes, copy the generated Terraform outputs into your
 
    | Output Name | GitHub Location | Variable / Secret Name | Description | 
    | ----- | ----- | ----- | ----- | 
-   | `tf_plan_role_arn` | Secrets | `AWS_ROLE_TF_PLAN` | IAM Role ARN for PR Planning | 
-   | `tf_apply_role_arn` | Secrets (Environment: `infra-apply`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Apply | 
-   | `tf_apply_role_arn` | Secrets (Environment: `infra-destroy`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Destroy | 
-   | `ecr_push_role_arn` | Secrets | `AWS_ROLE_ECR_PUSH` | IAM Role ARN for ECR Container Push | 
+   | `tf_plan_role_arn` | Secrets | `TF_PLAN_ROLE_ARN` | IAM Role ARN for PR Planning | 
+   | `tf_apply_role_arn` | Secrets (Environment: `infra-apply`) | `TF_APPLY_ROLE_ARN` | IAM Role ARN for Infrastructure Apply | 
+   | `tf_apply_role_arn` | Secrets (Environment: `infra-destroy`) | `TF_APPLY_ROLE_ARN` | IAM Role ARN for Infrastructure Destroy | 
+   | `ecr_push_role_arn` | Secrets | `ECR_PUSH_ROLE_ARN` | IAM Role ARN for ECR Container Push | 
    | `ecr_repository_urls` | Variables | `ECR_REPOSITORIES` | Container repository endpoints | 
    |  | Secrets  | `ADDITIONAL_CLUSTER_ADMINS` | List of ARNs for additional K8s admin | 
 

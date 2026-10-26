@@ -29,6 +29,9 @@ jobs:
       TF_VAR_env_tag: ${{ vars.ENV_TAG }}
       TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_acme_email: ${{ vars.ACME_EMAIL }}
+      TF_VAR_acme_issuer: ${{ vars.ACME_ISSUER }}
+      TF_VAR_subdomain: ${{ vars.SUBDOMAIN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.01
@@ -63,6 +66,9 @@ jobs:
       TF_VAR_env_tag: ${{ vars.ENV_TAG }}
       TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_acme_email: ${{ vars.ACME_EMAIL }}
+      TF_VAR_acme_issuer: ${{ vars.ACME_ISSUER }}
+      TF_VAR_subdomain: ${{ vars.SUBDOMAIN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.01
@@ -97,6 +103,9 @@ jobs:
       TF_VAR_env_tag: ${{ vars.ENV_TAG }}
       TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_acme_email: ${{ vars.ACME_EMAIL }}
+      TF_VAR_acme_issuer: ${{ vars.ACME_ISSUER }}
+      TF_VAR_subdomain: ${{ vars.SUBDOMAIN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.01

@@ -22,7 +22,7 @@ spec:
         namespaces:
           from: All
     - name: https
-      hostname: "{{ .Values.baseDomain }}"
+      hostname: "*.{{ .Values.baseDomain }}"
       protocol: HTTPS
       port: 443
       tls:

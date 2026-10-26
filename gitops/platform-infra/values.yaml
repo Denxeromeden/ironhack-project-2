@@ -37,15 +37,11 @@ external-dns:
   sources:
     - gateway-httproute
   policy: sync
-  txtOwnerId: "{{ .Values.clusterName }}"
-  domainFilters:
-    - "{{ .Values.baseDomain }}"
   aws:
     zoneType: public
   serviceAccount:
     create: true
     name: external-dns
-
   cloudnative-pg:
 
   headlamp:

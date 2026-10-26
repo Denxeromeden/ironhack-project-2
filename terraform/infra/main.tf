@@ -652,3 +652,8 @@ output "postgres_secret_name" {
   value       = aws_secretsmanager_secret.postgres.name
   description = "Name of the PostgreSQL secret in Secrets Manager"
 }
+
+output "vpc_id" {
+  value       = module.vpc.vpc_id
+  description = "ID of the created VPC"
+}

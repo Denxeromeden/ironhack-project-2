@@ -1,0 +1,340 @@
+name: CI Build, Scan & Push
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'gitops/**'
+      - 'terraform/**'
+      - 'README.md'
+
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'gitops/**'
+      - 'terraform/**'
+      - 'README.md'
+
+  workflow_dispatch:
+    inputs:
+      force_build_all:
+        description: 'Force build all services'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    outputs:
+      services: ${{ steps.matrix.outputs.services }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Filter changes
+        id: filter
+        uses: dorny/paths-filter@de90cc6fb3cefc056379926d8c4b874c46d29bc3 # v3.0.0
+        with:
+          filters: |
+            vote:
+              - 'vote/**'
+            result:
+              - 'result/**'
+            worker:
+              - 'worker/**'
+
+      - name: Build service matrix
+        id: matrix
+        env:
+          CHANGED_SERVICES: ${{ steps.filter.outputs.changes }}
+          FORCE_BUILD_ALL: ${{ inputs.force_build_all }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${FORCE_BUILD_ALL:-false}" == "true" ]]; then
+            services='["vote","result","worker"]'
+          else
+            services="${CHANGED_SERVICES:-[]}"
+          fi
+
+          echo "Services selected: $services"
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.services != '[]' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+
+    # Standard GitHub-hosted ARM64 runners are available for public
+    # repositories. Private repositories may require an ARM64 larger runner.
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebc0fb2af1b033c719b026dc084 # v3.8.0
+
+      - name: Build image
+        uses: docker/build-push-action@47ad13685fa01c08433efe256531279d033723b1 # v6.9.0
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          target: ${{ matrix.service == 'vote' && 'final' || '' }}
+          platforms: linux/arm64
+          load: true
+          tags: ${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Export image as tar artifact
+        env:
+          SERVICE: ${{ matrix.service }}
+          TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/artifacts
+          docker save "${SERVICE}:${TAG}" \
+            -o "/tmp/artifacts/${SERVICE}.tar"
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf888 # v4.4.0
+        with:
+          name: image-${{ matrix.service }}
+          path: /tmp/artifacts/${{ matrix.service }}.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  scan:
+    needs: [detect-changes, build]
+    if: ${{ needs.detect-changes.outputs.services != '[]' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: image-${{ matrix.service }}
+          path: /tmp/artifacts
+
+      - name: Load image into Docker
+        env:
+          SERVICE: ${{ matrix.service }}
+          TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker load -i "/tmp/artifacts/${SERVICE}.tar"
+          docker image inspect "${SERVICE}:${TAG}" >/dev/null
+
+      - name: Run Trivy vulnerability scanner
+        id: trivy
+        uses: aquasecurity/trivy-action@18f2510ff378b843343dad1561f95c06a880e1b8 # 0.28.0
+        with:
+          image-ref: '${{ matrix.service }}:${{ github.sha }}'
+          format: sarif
+          output: trivy-results-${{ matrix.service }}.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      - name: Check for SARIF output
+        id: sarif
+        if: always()
+        env:
+          SARIF_FILE: trivy-results-${{ matrix.service }}.sarif
+        run: |
+          if [[ -s "$SARIF_FILE" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Do not attempt a security-events upload on pull_request runs,
+      # where the token may not have write access (e.g. forked PRs).
+      - name: Upload Trivy scan results
+        if: ${{ always() && github.event_name != 'pull_request' && steps.sarif.outputs.exists == 'true' }}
+        uses: github/codeql-action/upload-sarif@66b2def595e4465375e13b66ff6192edd32c9fbe # v3.28.8
+        with:
+          sarif_file: trivy-results-${{ matrix.service }}.sarif
+
+  push:
+    needs: [detect-changes, build, scan]
+
+    # Manual publishing is permitted only when explicitly dispatched on main.
+    if: >-
+      ${{
+        needs.detect-changes.outputs.services != '[]' &&
+        github.ref == 'refs/heads/main' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download image artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: image-${{ matrix.service }}
+          path: /tmp/artifacts
+
+      - name: Assume AWS OIDC role for ECR push
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          # This secret must contain the bootstrap ecr_push_role_arn output.
+          role-to-assume: ${{ secrets.ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@062b18bf96a857595fce0db11566847db642639c # v2.0.1
+
+      - name: Load and push image to ECR
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          SERVICE: ${{ matrix.service }}
+          TAG: ${{ github.sha }}
+          UNIQUE_ID: ${{ vars.UNIQUE_ID }}
+          ENV_TAG: ${{ vars.ENV_TAG }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${UNIQUE_ID:?GitHub variable UNIQUE_ID is required}"
+          : "${ENV_TAG:?GitHub variable ENV_TAG is required}"
+
+          docker load -i "/tmp/artifacts/${SERVICE}.tar"
+
+          # Must match terraform/bootstrap/main.tf:
+          # name = "${local.name_prefix}-${each.key}"
+          REPOSITORY="${UNIQUE_ID}-${ENV_TAG}-${SERVICE}"
+          IMAGE="${REGISTRY}/${REPOSITORY}:${TAG}"
+
+          # Immutable tags: never overwrite a previously published image.
+          if aws ecr describe-images \
+            --repository-name "$REPOSITORY" \
+            --image-ids "imageTag=${TAG}" >/dev/null 2>&1; then
+            echo "Image already exists: ${IMAGE}; skipping push."
+            exit 0
+          fi
+
+          docker tag "${SERVICE}:${TAG}" "$IMAGE"
+          docker push "$IMAGE"
+
+          echo "Published ${IMAGE}"
+
+  bump-tag:
+    needs: [detect-changes, push]
+
+    if: >-
+      ${{
+        needs.detect-changes.outputs.services != '[]' &&
+        github.ref == 'refs/heads/main' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      }}
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    env:
+      SERVICES_JSON: ${{ needs.detect-changes.outputs.services }}
+      TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install yq
+        uses: mikefarah/yq@v4.44.3
+
+      - name: Update only the built service image tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VALUES_FILE="gitops/voting-app/values.yaml"
+
+          while IFS= read -r service; do
+            case "$service" in
+              vote|result|worker) ;;
+              *)
+                echo "Unexpected service in matrix: $service" >&2
+                exit 1
+                ;;
+            esac
+
+            echo "Setting ${service}.image.tag=${TAG}"
+            SERVICE="$service" \
+              yq eval -i \
+                '.[strenv(SERVICE)].image.tag = strenv(TAG)' \
+                "$VALUES_FILE"
+          done < <(jq -r '.[]' <<< "$SERVICES_JSON")
+
+      - name: Commit and push tag updates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VALUES_FILE="gitops/voting-app/values.yaml"
+
+          if git diff --quiet -- "$VALUES_FILE"; then
+            echo "No image tag changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "$VALUES_FILE"
+
+          if git diff --cached --quiet; then
+            echo "No staged changes."
+            exit 0
+          fi
+
+          git commit -m "chore(gitops): update voting-app image tags [skip ci]"
+          git push

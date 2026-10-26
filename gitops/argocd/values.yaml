@@ -1,0 +1,11 @@
+# Placeholder for values injected by the ApplicationSet
+clusterName: ""
+region: ""
+accountId: ""
+ecrRegistry: ""
+baseDomain: ""
+zoneId: ""
+acmeEmail: ""
+acmeIssuer: ""
+namePrefix: ""
+envTag: ""

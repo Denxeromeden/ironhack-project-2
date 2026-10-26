@@ -104,13 +104,39 @@ Once `terraform apply` completes, copy the generated Terraform outputs into your
 
    | Output Name | GitHub Location | Variable / Secret Name | Description | 
    | ----- | ----- | ----- | ----- | 
-   | `tf_plan_role_arn` | Variables | `AWS_ROLE_TF_PLAN` | IAM Role ARN for PR Planning | 
-   | `tf_apply_role_arn` | Variables (Environment: `infra-apply`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Apply | 
-   | `tf_apply_role_arn` | Variables (Environment: `infra-destroy`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Destroy | 
-   | `ecr_push_role_arn` | Variables | `AWS_ROLE_ECR_PUSH` | IAM Role ARN for ECR Container Push | 
+   | `tf_plan_role_arn` | Secrets | `AWS_ROLE_TF_PLAN` | IAM Role ARN for PR Planning | 
+   | `tf_apply_role_arn` | Secrets (Environment: `infra-apply`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Apply | 
+   | `tf_apply_role_arn` | Secrets (Environment: `infra-destroy`) | `AWS_ROLE_TF_APPLY` | IAM Role ARN for Infrastructure Destroy | 
+   | `ecr_push_role_arn` | Secrets | `AWS_ROLE_ECR_PUSH` | IAM Role ARN for ECR Container Push | 
    | `ecr_repository_urls` | Variables | `ECR_REPOSITORIES` | Container repository endpoints | 
+   |  | Secrets  | `ADDITIONAL_CLUSTER_ADMINS` | List of ARNs for additional K8s admin | 
 
-3. **Verify Connection:**
-   Open a test Pull Request to trigger the `tf-plan` workflow and verify that the GitHub OIDC provider successfully assumes the role and runs `terraform plan`.
+Add also as variables
+- ACME_EMAIL
+- ACME_ISSUER
+- AWS_REGION
+- ENV_TAG
+- SUBDOMAIN
+- UNIQUE_ID
+- ZONE_NAME
 
+
+## Step 5: Configure GitHub Variables and Secrets
+1. **Run the infrastructure pipeline:**
+    In GitHub actions run the `Terraform Pipeline` selecting the `apply` action
+
+2. **Run the Cluster bootstrap pipeline:**
+    In GitHub actions run the `Cluster bootstrap Pipeline` selecting the `apply-prerequisite` action (locally would be terraform apply -target=helm_release.argocd).
+    Once done, in GitHub actions run the `Cluster bootstrap Pipeline` selecting the `apply-full` action.
+
+3. **Access ArgoCD dashboard:**
+    Run
+    ```
+    aws eks update-kubeconfig --region <your aws region> --name <your-cluster-name>
+    kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+    echo
+    kubectl port-forward svc/argocd-server -n argocd 8080:443
+    ```
+    Access `https://localhost:8080` usign the retrieved password and `admin` as user 
 Original repo: https://github.com/Pokfinner/ironhack-project-1
+

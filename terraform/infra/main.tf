@@ -458,7 +458,8 @@ data "aws_iam_policy_document" "cert_manager" {
   statement {
     effect = "Allow"
     actions = [
-      "route53:ChangeResourceRecordSets"
+      "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets"
     ]
     resources = [
       "arn:aws:route53:::hostedzone/${local.route53_zone_id}"

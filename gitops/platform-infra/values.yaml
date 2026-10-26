@@ -1,0 +1,6 @@
+ngf:
+  fullnameOverride: nginx-gateway-fabric
+  nginxGateway:
+    gatewayClassName: nginx
+  service:
+    type: LoadBalancer

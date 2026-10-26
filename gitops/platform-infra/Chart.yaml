@@ -1,0 +1,12 @@
+apiVersion: v2
+name: platform-infra
+description: Platform infrastructure including Gateway API and NGF
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+  - name: nginx-gateway-fabric
+    version: "2.8.0" 
+    repository: oci://ghcr.io/nginx/charts
+    alias: ngf

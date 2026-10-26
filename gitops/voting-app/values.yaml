@@ -4,13 +4,12 @@ global:
   baseDomain: ""
   # Shared by vote and worker. Allowed values: every-click, one-per-voter.
   votingMode: one-per-voter
-
 vote:
   # Bootstrap placeholder only. CI replaces this with the immutable git-SHA tag.
   image:
-    tag: bootstrap
+    tag: a23ea86fc26efc6ec452b6ceadbd0b4668ba38a9
   replicas: 2
-  port: 80 
+  port: 80
   optionA: Cats
   optionB: Dogs
   resources:
@@ -20,11 +19,10 @@ vote:
     limits:
       cpu: 300m
       memory: 256Mi
-
 result:
   # Bootstrap placeholder only. CI replaces this with the immutable git-SHA tag.
   image:
-    tag: bootstrap
+    tag: a23ea86fc26efc6ec452b6ceadbd0b4668ba38a9
   replicas: 2
   port: 80
   resources:
@@ -34,11 +32,10 @@ result:
     limits:
       cpu: 300m
       memory: 256Mi
-
 worker:
   # Bootstrap placeholder only. CI replaces this with the immutable git-SHA tag.
   image:
-    tag: bootstrap
+    tag: a23ea86fc26efc6ec452b6ceadbd0b4668ba38a9
   replicas: 2
   resources:
     requests:
@@ -47,11 +44,10 @@ worker:
     limits:
       cpu: 500m
       memory: 384Mi
-
 redis:
   image: redis:7.4.2-alpine
   replicas: 1
-  port: 6379 
+  port: 6379
   maxMemory: 96mb
   resources:
     requests:
@@ -60,7 +56,6 @@ redis:
     limits:
       cpu: 250m
       memory: 160Mi
-
 postgres:
   # Public upstream CNPG PostgreSQL image; application images use the injected ECR registry.
   imageName: ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie
@@ -77,7 +72,6 @@ postgres:
     limits:
       cpu: "1"
       memory: 1Gi
-
 gateway:
   name: platform-gateway
   namespace: nginx-gateway

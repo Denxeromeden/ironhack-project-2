@@ -42,9 +42,10 @@ external-dns:
   serviceAccount:
     create: true
     name: external-dns
-  cloudnative-pg:
+    
+cloudnative-pg:
 
-  headlamp:
-  service:
-    type: ClusterIP
-    port: 80
+headlamp:
+service:
+  type: ClusterIP
+  port: 80

@@ -75,19 +75,20 @@ resource "kubernetes_secret_v1" "argocd_cluster_in_cluster" {
       "cluster-bootstrap-root"         = "true"
     }
     annotations = {
-      "cluster_name" = data.terraform_remote_state.infra.outputs.cluster_name
-      "region"       = var.aws_region
-      "account_id"   = data.aws_caller_identity.current.account_id
-      "ecr_registry" = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
-      "base_domain"  = local.base_domain
-      "zone_name"    = local.normalized_zone_name
-      "zone_id"      = data.aws_route53_zone.selected.zone_id
-      "acme_email"   = var.acme_email
-      "acme_issuer"  = var.acme_issuer
-      "name_prefix"  = local.name_prefix
-      "env_tag"      = var.env_tag
+      "cluster_name"  = data.terraform_remote_state.infra.outputs.cluster_name
+      "region"        = var.aws_region
+      "account_id"    = data.aws_caller_identity.current.account_id
+      "ecr_registry"  = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+      "base_domain"   = local.base_domain
+      "zone_name"     = local.normalized_zone_name
+      "zone_id"       = data.aws_route53_zone.selected.zone_id
+      "acme_email"    = var.acme_email
+      "acme_issuer"   = var.acme_issuer
+      "name_prefix"   = local.name_prefix
+      "env_tag"       = var.env_tag
       "repo_url"      = var.repo_url
-      "vpc_id"      = data.terraform_remote_state.infra.outputs.vpc_id
+      "vpc_id"        = data.terraform_remote_state.infra.outputs.vpc_id
+      "repo_revision" = var.repo_revision
     }
   }
 
@@ -186,6 +187,10 @@ resource "kubernetes_manifest" "root_applicationset" {
                 {
                   name  = "vpcId"
                   value = "{{metadata.annotations.vpc_id}}"
+                },
+                {
+                  name  = "targetRevision"
+                  value = "{{metadata.annotations.repo_revision}}"
                 }
               ]
             }

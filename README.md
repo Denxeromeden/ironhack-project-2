@@ -147,6 +147,6 @@ Add also as variables
     echo
     kubectl port-forward -n kube-system service/platform-infra-headlamp  8081:80
     ```
-    Access `https://localhost:8080` usign the retrieved password and `admin` as user 
+    Access `https://localhost:8081` using the retrieved token.
 Original repo: https://github.com/Pokfinner/ironhack-project-1
 

@@ -42,11 +42,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.01
 
       - name: Filter changes
         id: filter
-        uses: dorny/paths-filter@de90cc6fb3cefc056379926d8c4b874c46d29bc3 # v3.0.0
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3 
         with:
           filters: |
             vote:
@@ -89,13 +89,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.01
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@b5ca514318bd6ebc0fb2af1b033c719b026dc084 # v3.8.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build image
-        uses: docker/build-push-action@47ad13685fa01c08433efe256531279d033723b1 # v6.9.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./${{ matrix.service }}
           file: ./${{ matrix.service }}/Dockerfile
@@ -117,7 +117,7 @@ jobs:
             -o "/tmp/artifacts/${SERVICE}.tar"
 
       - name: Upload image artifact
-        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf888 # v4.4.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-${{ matrix.service }}
           path: /tmp/artifacts/${{ matrix.service }}.tar
@@ -141,7 +141,7 @@ jobs:
 
     steps:
       - name: Download image artifact
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2 
         with:
           name: image-${{ matrix.service }}
           path: /tmp/artifacts
@@ -157,7 +157,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner
         id: trivy
-        uses: aquasecurity/trivy-action@18f2510ff378b843343dad1561f95c06a880e1b8 # 0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
         with:
           image-ref: '${{ matrix.service }}:${{ github.sha }}'
           format: sarif
@@ -181,7 +181,7 @@ jobs:
       # where the token may not have write access (e.g. forked PRs).
       - name: Upload Trivy scan results
         if: ${{ always() && github.event_name != 'pull_request' && steps.sarif.outputs.exists == 'true' }}
-        uses: github/codeql-action/upload-sarif@66b2def595e4465375e13b66ff6192edd32c9fbe # v3.28.8
+        uses: github/codeql-action/upload-sarif@0fda7a646fd14a20daf520829ca1ae8847000819 # v4.39.1
         with:
           sarif_file: trivy-results-${{ matrix.service }}.sarif
 
@@ -209,16 +209,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.01
 
       - name: Download image artifact
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: image-${{ matrix.service }}
           path: /tmp/artifacts
 
       - name: Assume AWS OIDC role for ECR push
-        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd #v6.3.0
         with:
           # This secret must contain the bootstrap ecr_push_role_arn output.
           role-to-assume: ${{ secrets.ECR_PUSH_ROLE_ARN }}
@@ -226,7 +226,7 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@062b18bf96a857595fce0db11566847db642639c # v2.0.1
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
 
       - name: Load and push image to ECR
         env:
@@ -283,7 +283,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.01
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 

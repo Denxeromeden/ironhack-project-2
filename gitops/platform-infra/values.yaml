@@ -14,6 +14,8 @@ aws-load-balancer-controller:
 
 external-secrets:
   installCRDs: true
+  namespaceOverride: external-secrets
+  fullnameOverride: external-secrets
   serviceAccount:
     create: true
     name: external-secrets

@@ -290,15 +290,6 @@ jobs:
       - name: Install yq
         uses: mikefarah/yq@504fc38780cc46be8444ea1b72fb55919fc0bfb0 #v4.54.1
 
-      - name: Diagnose values file path
-        run: |
-          echo "Checked-out commit: $(git rev-parse HEAD)"
-          echo "GitHub ref: $GITHUB_REF"
-          echo "Tracked values.yaml files:"
-          git ls-files 'gitops/**/values.yaml'
-          echo "GitOps directories:"
-          find gitops -maxdepth 4 -type d -print
-
       - name: Update only the built service image tags
         shell: bash
         run: |

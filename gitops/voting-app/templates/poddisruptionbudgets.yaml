@@ -1,0 +1,14 @@
+{{- range $name := list "vote" "result" "worker" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "voting-app.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "voting-app.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+{{- end }}

@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: voting-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: '{{ .Values.repoURL }}'
+    targetRevision: '{{ .Values.targetRevision }}'
+    path: gitops/voting-app
+    helm:
+      values: |
+        global:
+          imageRegistry: {{ .Values.ecrRegistry | quote }}
+          namePrefix: {{ .Values.namePrefix | quote }}
+          baseDomain: {{ .Values.baseDomain | quote }}
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: voting-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

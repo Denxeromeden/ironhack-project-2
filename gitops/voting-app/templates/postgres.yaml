@@ -1,0 +1,35 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  labels:
+    {{- include "voting-app.labels" (dict "root" . "name" "postgres") | nindent 4 }}
+spec:
+  instances: {{ .Values.postgres.instances }}
+  imageName: {{ .Values.postgres.imageName | quote }}
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database | quote }}
+      owner: {{ .Values.postgres.username | quote }}
+      secret:
+        name: postgres-app-credentials
+  # No synchronous replication setting is configured: CNPG uses asynchronous
+  # streaming replication. Failover can lose the last unreplicated transactions.
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: topology.kubernetes.io/zone
+  storage:
+    storageClass: {{ .Values.postgres.storageClass | quote }}
+    size: {{ .Values.postgres.storageSize | quote }}
+  resources:
+    {{- toYaml .Values.postgres.resources | nindent 4 }}
+  managed:
+    roles:
+      - name: {{ .Values.postgres.username | quote }}
+        ensure: present
+        login: true
+        superuser: false
+        passwordSecret:
+          name: postgres-app-credentials

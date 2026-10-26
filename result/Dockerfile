@@ -1,14 +1,11 @@
-FROM node:18-slim
+FROM node:24-slim
 
-# add curl for healthcheck
+# Add curl, tini, and build essentials if your dependencies require native compilation
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl tini && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/local/app
-
-# have nodemon available for local dev use (file watching)
-RUN npm install -g nodemon
 
 COPY package*.json ./
 
@@ -27,7 +24,7 @@ ENV PORT=80 \
 
 EXPOSE 80
 
-# node, the unprivileged user the Node image ships
+# Node, the unprivileged user the Node image ships with
 USER 1000
 
 ENTRYPOINT ["/usr/bin/tini", "--"]

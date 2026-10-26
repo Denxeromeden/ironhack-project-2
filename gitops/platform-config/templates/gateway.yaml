@@ -7,6 +7,13 @@ metadata:
     cert-manager.io/cluster-issuer: "{{ .Values.acmeIssuer }}"
 spec:
   gatewayClassName: nginx
+
+  infrastructure:
+    parametersRef:
+      group: gateway.nginx.org
+      kind: NginxProxy
+      name: platform-ingress-proxy
+
   listeners:
     - name: http
       protocol: HTTP
@@ -15,6 +22,7 @@ spec:
         namespaces:
           from: All
     - name: https
+      hostname: "{{ .Values.baseDomain }}"
       protocol: HTTPS
       port: 443
       tls:
@@ -29,8 +37,6 @@ spec:
           selector:
             matchLabels:
               kubernetes.io/metadata.name: voting-app # Restricted to app namespace
-  addresses:
-    - type: IPAddress
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

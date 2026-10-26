@@ -34,7 +34,7 @@ spec:
         - name: external-dns.txtOwnerId
           value: "{{ .Values.clusterName }}"
         - name: "external-dns.domainFilters[0]"
-          value: "{{ .Values.baseDomain }}"
+          value: "{{ .Values.zoneName }}"
         - name: region
           value: "{{ .Values.region }}"
   destination:

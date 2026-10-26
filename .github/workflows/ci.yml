@@ -295,7 +295,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          VALUES_FILE="gitops/voting-app/values.yaml"
+          VALUES_FILE="${GITHUB_WORKSPACE}/gitops/voting-app/values.yaml"
 
           while IFS= read -r service; do
             case "$service" in
@@ -305,7 +305,13 @@ jobs:
                 exit 1
                 ;;
             esac
-
+            echo "Working directory: $(pwd)"
+            echo "Values file: ${VALUES_FILE}"
+            ls -la "$(dirname "$VALUES_FILE")"
+            test -f "$VALUES_FILE" || {
+              echo "::error::Values file not found: $VALUES_FILE"
+              exit 1
+            }
             echo "Setting ${service}.image.tag=${TAG}"
             SERVICE="$service" \
               yq eval -i \
@@ -318,7 +324,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          VALUES_FILE="gitops/voting-app/values.yaml"
+          VALUES_FILE="${GITHUB_WORKSPACE}/gitops/voting-app/values.yaml"
 
           if git diff --quiet -- "$VALUES_FILE"; then
             echo "No image tag changes to commit."

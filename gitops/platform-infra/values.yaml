@@ -4,3 +4,47 @@ ngf:
     gatewayClassName: nginx
   service:
     type: LoadBalancer
+
+aws-load-balancer-controller:
+  clusterName: "{{ .Values.clusterName }}"
+  region: "{{ .Values.region }}"
+  serviceAccount:
+    create: true
+    name: aws-load-balancer-controller
+
+external-secrets:
+  serviceAccount:
+    create: true
+    name: external-secrets
+
+cert-manager:
+  installCRDs: true
+  serviceAccount:
+    create: true
+    name: cert-manager
+  config:
+    apiVersion: controller.config.cert-manager.io/v1alpha1
+    kind: ControllerConfiguration
+    gatewayAPI:
+      enabled: true
+
+external-dns:
+  provider: aws
+  sources:
+    - gateway-httproute
+  policy: sync
+  txtOwnerId: "{{ .Values.clusterName }}"
+  domainFilters:
+    - "{{ .Values.baseDomain }}"
+  aws:
+    zoneType: public
+  serviceAccount:
+    create: true
+    name: external-dns
+
+  cloudnative-pg:
+
+  headlamp:
+  service:
+    type: ClusterIP
+    port: 80

@@ -138,5 +138,15 @@ Add also as variables
     kubectl port-forward svc/argocd-server -n argocd 8080:443
     ```
     Access `https://localhost:8080` usign the retrieved password and `admin` as user 
+
+4. **Access Headlamp dashboard:**
+    Run
+    ```
+    aws eks update-kubeconfig --region <your aws region> --name <your-cluster-name>
+    kubectl create token headlamp-viewer -n platform-infra --duration=1h
+    echo
+    kubectl port-forward -n platform-infra service/headlamp 8081:80
+    ```
+    Access `https://localhost:8080` usign the retrieved password and `admin` as user 
 Original repo: https://github.com/Pokfinner/ironhack-project-1
 

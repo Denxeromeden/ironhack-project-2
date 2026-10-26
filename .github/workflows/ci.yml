@@ -285,7 +285,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.01
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.TAG_BOT_PAT }}
 
       - name: Install yq
         uses: mikefarah/yq@504fc38780cc46be8444ea1b72fb55919fc0bfb0 #v4.54.1

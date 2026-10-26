@@ -25,6 +25,12 @@ spec:
           value: "{{ .Values.region }}"
         - name: "aws-lb-controller.vpcId"
           value: "{{ .Values.vpcId }}"
+        - name: zoneId
+          value: "{{ .Values.zoneId }}"
+        - name: acmeEmail
+          value: "{{ .Values.acmeEmail }}"
+        - name: acmeIssuer
+          value: "{{ .Values.acmeIssuer }}"
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: kube-system

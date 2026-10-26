@@ -21,6 +21,10 @@ spec:
           value: "{{ .Values.envTag }}"
         - name: "aws-lb-controller.clusterName"
           value: "{{ .Values.clusterName }}"
+        - name: "aws-lb-controller.region"
+          value: "{{ .Values.region }}"
+        - name: "aws-lb-controller.vpcId"
+          value: "{{ .Values.vpcId }}"
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: kube-system

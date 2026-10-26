@@ -87,6 +87,7 @@ resource "kubernetes_secret_v1" "argocd_cluster_in_cluster" {
       "name_prefix"  = local.name_prefix
       "env_tag"      = var.env_tag
       "repo_url"      = var.repo_url
+      "vpc_id"      = data.terraform_remote_state.infra.outputs.vpc_id
     }
   }
 
@@ -181,6 +182,10 @@ resource "kubernetes_manifest" "root_applicationset" {
                 {
                   name  = "repoURL"
                   value = "{{metadata.annotations.repo_url}}"
+                },
+                {
+                  name  = "vpcId"
+                  value = "{{metadata.annotations.vpc_id}}"
                 }
               ]
             }

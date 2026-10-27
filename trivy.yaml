@@ -1,0 +1,18 @@
+# Shared defaults. Workflows override format and exit-code for full SARIF + a separate gate.
+format: table
+exit-code: 1
+ignorefile: .trivyignore
+severity:
+  - HIGH
+  - CRITICAL
+scan:
+  scanners:
+    - vuln
+    - secret
+    - misconfig
+  skip-dirs:
+    - .git
+    - node_modules
+    - .terraform
+vulnerability:
+  ignore-unfixed: true

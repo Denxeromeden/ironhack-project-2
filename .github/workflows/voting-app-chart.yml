@@ -1,0 +1,95 @@
+name: Voting app chart validation
+
+on:
+  pull_request:
+    paths:
+      - "gitops/voting-app/**"
+      - "gitops/argocd/**"
+      - ".github/workflows/voting-app-chart.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gitops/voting-app/**"
+      - "gitops/argocd/**"
+      - ".github/workflows/voting-app-chart.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: voting-app-chart-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      HELM_VERSION: v3.22.1
+      KUBECONFORM_VERSION: 0.8.0
+      TRIVY_VERSION: 0.76.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned validation tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+          curl -fsSLo "$RUNNER_TEMP/helm.tar.gz" "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          tar -xzf "$RUNNER_TEMP/helm.tar.gz" -C "$RUNNER_TEMP"
+          install "$RUNNER_TEMP/linux-amd64/helm" "$RUNNER_TEMP/bin/helm"
+
+          curl -fsSLo "$RUNNER_TEMP/kubeconform.tar.gz" "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" -C "$RUNNER_TEMP" kubeconform
+          install "$RUNNER_TEMP/kubeconform" "$RUNNER_TEMP/bin/kubeconform"
+
+          curl -fsSLo "$RUNNER_TEMP/trivy.tar.gz" "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP" trivy
+          install "$RUNNER_TEMP/trivy" "$RUNNER_TEMP/bin/trivy"
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+
+          helm version --short
+          kubeconform -v
+          trivy --version
+
+      - name: Helm lint
+        working-directory: gitops/voting-app
+        run: |
+          helm lint . \
+            --set global.imageRegistry=example.invalid \
+            --set global.namePrefix=validation \
+            --set global.baseDomain=example.invalid
+
+      - name: Render chart
+        working-directory: gitops/voting-app
+        run: |
+          helm template voting-app . \
+            --namespace voting-app \
+            --set global.imageRegistry=example.invalid \
+            --set global.namePrefix=validation \
+            --set global.baseDomain=example.invalid \
+            > "$RUNNER_TEMP/voting-app-rendered.yaml"
+
+      - name: Validate Kubernetes and custom resources
+        run: |
+          kubeconform \
+            -strict \
+            -summary \
+            -kubernetes-version 1.37.0 \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            "$RUNNER_TEMP/voting-app-rendered.yaml"
+
+      - name: Trivy configuration scan
+        run: |
+          trivy config \
+            --exit-code 1 \
+            --severity HIGH,CRITICAL \
+            --no-progress \
+            "$RUNNER_TEMP/voting-app-rendered.yaml"

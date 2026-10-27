@@ -1,0 +1,5 @@
+# No Trivy findings are currently suppressed.
+# Every future exception must have its own reason and expiry comment immediately above it:
+# reason: Explain why the finding is accepted and identify the follow-up ticket.
+# expires: YYYY-MM-DD
+# CVE-YYYY-NNNNN (do not uncomment this example)

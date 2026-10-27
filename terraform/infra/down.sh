@@ -35,7 +35,7 @@ done
 TF_VARS=(-var "unique_id=${UNIQUE_ID}" -var "env_tag=${ENV_TAG}" -var "aws_region=${REGION}")
 
 log "Initializing Terraform..."
-terraform init -input=false >/dev/null
+terraform init -input=false -backend-config=../backend.conf >/dev/null
 
 cleanup_guardduty() {
   local vpc_id="$1" endpoints sg i
@@ -75,11 +75,11 @@ if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null
 
   log "Deleting PersistentVolumeClaims..."
   kubectl delete pvc --all --all-namespaces --wait=false 2>/dev/null || true
-  
+
   for ns in $(kubectl get ns -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
     [[ "$ns" == kube-* || "$ns" == "kube-system" || "$ns" == "kube-node-lease" || "$ns" == "default" ]] || kubectl delete pods --all -n "$ns" --wait=false 2>/dev/null || true
   done
-  
+
   if [[ -n "$(kubectl get pv -o name 2>/dev/null)" ]]; then
     kubectl wait --for=delete pv --all --timeout=120s 2>/dev/null || true
   fi

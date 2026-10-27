@@ -1,0 +1,396 @@
+name: Terraform plan and apply
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/infra/**"
+      - "terraform/cluster-bootstrap/**"
+      - "terraform/backend.conf"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/infra/**"
+      - "terraform/cluster-bootstrap/**"
+      - "terraform/backend.conf"
+  #schedule:
+  #  - cron: "17 6 * * 1" #enable for prod
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Run a plan only, or apply both stacks in dependency order
+        required: true
+        type: choice
+        default: plan
+        options: [plan, apply]
+
+permissions: {}
+
+jobs:
+  validate-pr:
+    name: Validate Terraform (no AWS credentials)
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TRIVY_VERSION: 0.76.1
+      TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+      - name: Cache Terraform providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/terraform-plugin-cache
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-providers-${{ runner.os }}-
+
+      - name: Install pinned TFLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          TFLINT_VERSION=0.64.0
+          TFLINT_SHA256=cca9d13e2e1d7a2c627af60ff899a3c9b74212899416aeb96ec764d2ef954537
+          curl -fsSLo "$RUNNER_TEMP/tflint.zip" "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_amd64.zip"
+          echo "${TFLINT_SHA256}  $RUNNER_TEMP/tflint.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          unzip -q "$RUNNER_TEMP/tflint.zip" tflint -d "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          tflint --version
+      - name: Check Terraform formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          for stack in infra cluster-bootstrap; do
+            terraform fmt -check -recursive "terraform/${stack}"
+          done
+      - name: Validate both Terraform stacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          for stack in infra cluster-bootstrap; do
+            echo "Validating terraform/${stack}"
+            pushd "terraform/${stack}" >/dev/null
+            terraform init -input=false -backend=false
+            terraform validate
+            popd >/dev/null
+            tflint --chdir="terraform/${stack}" --no-color
+          done
+      - name: Install pinned Trivy binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSLo "$RUNNER_TEMP/trivy.tar.gz" "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP" trivy
+          mkdir -p "$RUNNER_TEMP/bin"
+          install "$RUNNER_TEMP/trivy" "$RUNNER_TEMP/bin/trivy"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          trivy --version
+      - name: Cache Trivy database
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-${{ runner.os }}-${{ env.TRIVY_VERSION }}-terraform-${{ github.run_id }}
+          restore-keys: trivy-${{ runner.os }}-${{ env.TRIVY_VERSION }}-
+      - name: Validate Trivy exception policy
+        run: python3 .github/scripts/check-trivyignore.py .trivyignore
+      - name: Scan Terraform configuration
+        run: |
+          trivy config \
+            --cache-dir "$TRIVY_CACHE_DIR" \
+            --config trivy.yaml \
+            --ignorefile .trivyignore \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            terraform
+
+  plan-infra:
+    name: Plan infra and comment on PR
+    if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'workflow_dispatch' && inputs.action == 'plan') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
+      TF_VAR_env_tag: ${{ vars.ENV_TAG }}
+      TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
+      TF_VAR_subdomain: ${{ vars.SUBDOMAIN }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_additional_cluster_admins: ${{ secrets.ADDITIONAL_CLUSTER_ADMINS || '[]' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+      - name: Cache Terraform providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/terraform-plugin-cache
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-providers-${{ runner.os }}-
+
+      - name: Configure AWS credentials with read-only plan role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TF_PLAN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Initialize infra stack and cache providers
+        working-directory: terraform/infra
+        run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          terraform init -input=false -backend-config=../backend.conf
+      - name: Create read-only plan (no plan artifact)
+        working-directory: terraform/infra
+        run: |
+          terraform plan -input=false -lock=false -no-color -out="$RUNNER_TEMP/infra.tfplan" > "$RUNNER_TEMP/terraform-plan-command.txt"
+          terraform show -no-color "$RUNNER_TEMP/infra.tfplan" > "$RUNNER_TEMP/infra-plan.txt"
+      - name: Post plan diff as a PR comment
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 .github/scripts/post-plan-comment.py "$RUNNER_TEMP/infra-plan.txt"
+      - name: Print plan summary for manual dispatch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          grep -E '^(Plan: .*|No changes\..*)$' "$RUNNER_TEMP/infra-plan.txt" | tail -n 1 || true
+
+  plan-cluster-bootstrap:
+    name: Plan cluster-bootstrap (manual dispatch only)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'plan' }}
+    runs-on: ubuntu-latest
+    needs: plan-infra
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
+      TF_VAR_env_tag: ${{ vars.ENV_TAG }}
+      TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
+      TF_VAR_subdomain: ${{ vars.SUBDOMAIN }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_acme_email: ${{ vars.ACME_EMAIL }}
+      TF_VAR_acme_issuer: ${{ vars.ACME_ISSUER }}
+      TF_VAR_repo_url: ${{ github.server_url }}/${{ github.repository }}
+      TF_VAR_repo_revision: main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+      - name: Cache Terraform providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/terraform-plugin-cache
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-providers-${{ runner.os }}-
+
+      - name: Configure AWS credentials with read-only plan role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TF_PLAN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Initialize cluster-bootstrap stack
+        working-directory: terraform/cluster-bootstrap
+        run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          aws eks update-kubeconfig --region "$TF_VAR_aws_region" --name "${TF_VAR_unique_id}-${TF_VAR_env_tag}-cluster"
+          terraform init -input=false -backend-config=../backend.conf
+      - name: Create plan (not uploaded)
+        working-directory: terraform/cluster-bootstrap
+        run: terraform plan -input=false -lock=false -no-color
+
+  validate-fork-notice:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+    permissions:
+      contents: read
+    steps:
+      - run: echo "Terraform validate/TFLint/Trivy still run for fork PRs. AWS plan is skipped because fork PRs must not receive OIDC credentials or repository secrets."
+
+  apply-stacks:
+    name: Apply infra, then cluster-bootstrap
+    if: ${{ github.ref == 'refs/heads/main' && ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply')) }}
+    runs-on: ubuntu-latest
+    environment: infra-apply
+    concurrency:
+      group: terraform-${{ vars.UNIQUE_ID }}-${{ vars.ENV_TAG }}
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
+      TF_VAR_env_tag: ${{ vars.ENV_TAG }}
+      TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
+      TF_VAR_subdomain: ${{ vars.SUBDOMAIN }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_additional_cluster_admins: ${{ secrets.ADDITIONAL_CLUSTER_ADMINS || '[]' }}
+      TF_VAR_acme_email: ${{ vars.ACME_EMAIL }}
+      TF_VAR_acme_issuer: ${{ vars.ACME_ISSUER }}
+      TF_VAR_repo_url: ${{ github.server_url }}/${{ github.repository }}
+      TF_VAR_repo_revision: main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+      - name: Cache Terraform providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/terraform-plugin-cache
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-providers-${{ runner.os }}-
+
+      - name: Configure AWS credentials for approved apply
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TF_APPLY }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Apply infra stack
+        working-directory: terraform/infra
+        run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          terraform init -input=false -backend-config=../backend.conf
+          terraform apply -input=false -auto-approve
+      - name: Apply Argo CD prerequisite
+        working-directory: terraform/cluster-bootstrap
+        run: |
+          terraform init -input=false -backend-config=../backend.conf
+          terraform apply -input=false -auto-approve -target=helm_release.argocd
+      - name: Apply complete cluster-bootstrap stack
+        working-directory: terraform/cluster-bootstrap
+        run: terraform apply -input=false -auto-approve
+
+  drift-check:
+    name: Weekly Terraform drift check
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
+      TF_VAR_env_tag: ${{ vars.ENV_TAG }}
+      TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
+      TF_VAR_subdomain: ${{ vars.SUBDOMAIN }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_additional_cluster_admins: ${{ secrets.ADDITIONAL_CLUSTER_ADMINS || '[]' }}
+      TF_VAR_acme_email: ${{ vars.ACME_EMAIL }}
+      TF_VAR_acme_issuer: ${{ vars.ACME_ISSUER }}
+      TF_VAR_repo_url: ${{ github.server_url }}/${{ github.repository }}
+      TF_VAR_repo_revision: main
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+      - name: Cache Terraform providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/terraform-plugin-cache
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-providers-${{ runner.os }}-
+
+      - name: Configure AWS credentials with read-only plan role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TF_PLAN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Plan both stacks without persisting plan artifacts
+        id: drift
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$RUNNER_TEMP/drift"
+          drift_stacks=()
+          for stack in infra cluster-bootstrap; do
+            if [[ "$stack" == "cluster-bootstrap" ]] && ! aws eks describe-cluster --name "${TF_VAR_unique_id}-${TF_VAR_env_tag}-cluster" --region "$TF_VAR_aws_region" >/dev/null 2>&1; then
+              echo "Cluster not present; skipping cluster-bootstrap drift plan."
+              continue
+            fi
+            pushd "terraform/${stack}" >/dev/null
+            terraform init -input=false -backend-config=../backend.conf > "$RUNNER_TEMP/drift/${stack}-init.log" 2>&1 || { cat "$RUNNER_TEMP/drift/${stack}-init.log"; exit 1; }
+            set +e
+            terraform plan -input=false -lock=false -no-color -detailed-exitcode > "$RUNNER_TEMP/drift/${stack}-plan.txt" 2>&1
+            result=$?
+            set -e
+            popd >/dev/null
+            if [[ "$result" -eq 2 ]]; then
+              drift_stacks+=("$stack")
+            elif [[ "$result" -ne 0 ]]; then
+              echo "Plan failed for $stack; see workflow log." >&2
+              exit "$result"
+            fi
+          done
+          printf '%s\n' "${drift_stacks[@]}" > "$RUNNER_TEMP/drift/changed-stacks.txt"
+          if [[ "${#drift_stacks[@]}" -gt 0 ]]; then
+            echo "drift_found=true" >> "$GITHUB_OUTPUT"
+            printf 'Terraform reported changes in: %s\n' "${drift_stacks[*]}" > "$RUNNER_TEMP/drift/body.txt"
+            for stack in "${drift_stacks[@]}"; do
+              printf '\n### %s\n' "$stack" >> "$RUNNER_TEMP/drift/body.txt"
+              grep -E '^(Plan: .*|No changes\..*)$' "$RUNNER_TEMP/drift/${stack}-plan.txt" | tail -n 1 >> "$RUNNER_TEMP/drift/body.txt" || true
+            done
+          else
+            echo "drift_found=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create or update drift issue
+        if: ${{ steps.drift.outputs.drift_found == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title="Terraform drift detected"
+          number="$(gh issue list --state open --search "in:title ${title}" --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -n 1)"
+          if [[ -z "$number" ]]; then
+            gh issue create --title "$title" --body-file "$RUNNER_TEMP/drift/body.txt"
+          else
+            gh issue comment "$number" --body-file "$RUNNER_TEMP/drift/body.txt"
+          fi

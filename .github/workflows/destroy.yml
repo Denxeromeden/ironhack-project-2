@@ -1,0 +1,223 @@
+name: Destroy EKS environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_cluster_name:
+        description: Type the exact EKS cluster name to confirm destruction
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: terraform-${{ vars.UNIQUE_ID }}-${{ vars.ENV_TAG }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  destroy:
+    name: Destroy app resources, cluster bootstrap, then infra
+    runs-on: ubuntu-latest
+    environment: infra-destroy
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
+      TF_VAR_env_tag: ${{ vars.ENV_TAG }}
+      TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
+      TF_VAR_subdomain: ${{ vars.SUBDOMAIN }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_acme_email: ${{ vars.ACME_EMAIL }}
+      TF_VAR_acme_issuer: ${{ vars.ACME_ISSUER }}
+      TF_VAR_repo_url: ${{ github.server_url }}/${{ github.repository }}
+      TF_VAR_repo_revision: main
+      CONFIRM_CLUSTER_NAME: ${{ inputs.confirm_cluster_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate typed confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${TF_VAR_unique_id}-${TF_VAR_env_tag}-cluster"
+          if [[ -z "${TF_VAR_unique_id}" || -z "${TF_VAR_env_tag}" || -z "${AWS_REGION}" || -z "${TF_VAR_zone_name}" || -z "${TF_VAR_subdomain}" ]]; then
+            echo "::error::One or more required Actions variables are empty. Check UNIQUE_ID, ENV_TAG, AWS_REGION, ZONE_NAME and SUBDOMAIN."
+            exit 1
+          fi
+          if [[ "$CONFIRM_CLUSTER_NAME" != "$expected" ]]; then
+            echo "::error::Confirmation mismatch. Type exactly: ${expected}"
+            exit 1
+          fi
+          echo "Confirmed destruction of ${expected} in ${AWS_REGION}. ECR repositories and the bootstrap stack will be preserved."
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+
+      - name: Cache Terraform providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/terraform-plugin-cache
+          key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-providers-${{ runner.os }}-
+
+      - name: Configure AWS credentials for approved destroy
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TF_APPLY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Connect to EKS and pause the Argo CD root reconciler
+        shell: bash
+        run: |
+          set -euo pipefail
+          cluster_name="${TF_VAR_unique_id}-${TF_VAR_env_tag}-cluster"
+          if aws eks describe-cluster --name "$cluster_name" --region "$AWS_REGION" >/dev/null 2>&1; then
+            aws eks update-kubeconfig --region "$AWS_REGION" --name "$cluster_name" --alias "$cluster_name"
+            # Stop the ApplicationSet from regenerating root-app, but orphan the app
+            # so its child Applications can be deleted in a deliberate order.
+            kubectl -n argocd delete applicationset root --cascade=orphan --wait=true --ignore-not-found=true
+            # The ApplicationSet is deliberately deleted outside Terraform after this
+            # point; state is reconciled in the next stack step before destroy.
+            kubectl -n argocd patch application root-app --type=merge --patch '{"spec":{"syncPolicy":null}}' 2>/dev/null || true
+            echo "EKS cluster is reachable; Argo CD reconciliation is paused for ordered cleanup."
+          else
+            echo "EKS cluster ${cluster_name} does not exist; Kubernetes cleanup will be skipped."
+          fi
+
+      - name: Delete workload and Gateway Applications first
+        shell: bash
+        run: |
+          set -euo pipefail
+          cluster_name="${TF_VAR_unique_id}-${TF_VAR_env_tag}-cluster"
+          if ! aws eks describe-cluster --name "$cluster_name" --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "Cluster absent; skipping Argo CD Application cleanup."
+            exit 0
+          fi
+          # Keep platform-infra (ExternalDNS and AWS Load Balancer Controller) alive
+          # while routes are removed so DNS records and load balancers can be cleaned up.
+          kubectl -n argocd delete application voting-app --wait=true --timeout=20m --ignore-not-found=true
+          kubectl -n argocd delete application platform-config --wait=true --timeout=20m --ignore-not-found=true
+          # Remove any PVCs that did not disappear through Argo CD pruning.
+          kubectl delete pvc --all -n voting-app --wait=true --timeout=10m 2>/dev/null || true
+
+      - name: Wait for application DNS records to be removed
+        shell: bash
+        run: |
+          set -euo pipefail
+          zone_name="${TF_VAR_zone_name%.}."
+          hosted_zone_id="$(aws route53 list-hosted-zones-by-name --dns-name "$zone_name" --max-items 1 --query 'HostedZones[0].Id' --output text | sed 's#^/hostedzone/##')"
+          if [[ -z "$hosted_zone_id" || "$hosted_zone_id" == "None" ]]; then
+            echo "::warning::Could not find hosted zone ${zone_name}; DNS cleanup will be checked in the final report."
+            exit 0
+          fi
+          suffix="${TF_VAR_subdomain}.${TF_VAR_zone_name%.}."
+          for attempt in $(seq 1 30); do
+            count="$(aws route53 list-resource-record-sets --hosted-zone-id "$hosted_zone_id" --output json | jq --arg suffix "$suffix" '[.ResourceRecordSets[] | select((.Name == $suffix) or (.Name | endswith("." + $suffix)))] | length')"
+            if [[ "$count" == "0" ]]; then
+              echo "No Route 53 records remain under ${suffix} (hosted zone ${hosted_zone_id})."
+              exit 0
+            fi
+            echo "${count} DNS record(s) remain under ${suffix}; waiting for ExternalDNS (attempt ${attempt}/30)."
+            sleep 30
+          done
+          echo "::warning::DNS records remain after 15 minutes; final report will show them. Continuing teardown."
+
+      - name: Remove platform controllers and remaining root Application
+        shell: bash
+        run: |
+          set -euo pipefail
+          cluster_name="${TF_VAR_unique_id}-${TF_VAR_env_tag}-cluster"
+          if ! aws eks describe-cluster --name "$cluster_name" --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "Cluster absent; skipping remaining Argo CD cleanup."
+            exit 0
+          fi
+          # Routes are gone and ExternalDNS has had time to remove its records.
+          kubectl -n argocd delete application platform-infra --wait=true --timeout=20m --ignore-not-found=true
+          kubectl -n argocd delete application root-app --wait=true --timeout=20m --ignore-not-found=true
+
+      - name: Destroy cluster-bootstrap stack
+        working-directory: terraform/cluster-bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          terraform init -input=false -backend-config=../backend.conf
+          # root ApplicationSet was removed intentionally before its children; remove
+          # the out-of-band deleted object from state to make destroy deterministic.
+          if terraform state list | grep -Fxq 'kubernetes_manifest.root_applicationset'; then
+            terraform state rm -lock-timeout=5m kubernetes_manifest.root_applicationset
+          fi
+          terraform destroy -input=false -auto-approve
+
+      - name: Capture VPC ID before infrastructure cleanup
+        id: infra-state
+        working-directory: terraform/infra
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform init -input=false -backend-config=../backend.conf
+          vpc_id="$(terraform output -raw vpc_id 2>/dev/null || true)"
+          echo "vpc_id=${vpc_id}" >> "$GITHUB_OUTPUT"
+          echo "VPC ID before infra teardown: ${vpc_id:-not available}"
+
+      - name: Destroy infra (leave bootstrap/ECR intact)
+        working-directory: terraform/infra
+        env:
+          DESTROY_VPC_ID: ${{ steps.infra-state.outputs.vpc_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # down.sh accepts only unique_id and env_tag. It reads region from AWS_REGION.
+          AWS_REGION="$AWS_REGION" ./down.sh "$TF_VAR_unique_id" "$TF_VAR_env_tag"
+          echo "DESTROY_VPC_ID=${DESTROY_VPC_ID}" >> "$GITHUB_ENV"
+
+      - name: Report possible regional leftovers
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          echo "## Post-destroy resource check" >> "$GITHUB_STEP_SUMMARY"
+          echo "Region: ${AWS_REGION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cluster: ${TF_VAR_unique_id}-${TF_VAR_env_tag}-cluster" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo '### Load balancers in region' >> "$GITHUB_STEP_SUMMARY"
+          aws elbv2 describe-load-balancers --region "$AWS_REGION" --query 'LoadBalancers[].{Name:LoadBalancerName,DNS:DNSName,State:State.Code}' --output table >> "$GITHUB_STEP_SUMMARY" 2>&1
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo '### Available EBS volumes' >> "$GITHUB_STEP_SUMMARY"
+          aws ec2 describe-volumes --region "$AWS_REGION" --filters Name=status,Values=available --query 'Volumes[].{Id:VolumeId,AZ:AvailabilityZone,SizeGiB:Size,Tags:Tags}' --output table >> "$GITHUB_STEP_SUMMARY" 2>&1
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo '### Network interfaces in the previous VPC (if VPC ID was captured)' >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "${DESTROY_VPC_ID:-}" ]]; then
+            aws ec2 describe-network-interfaces --region "$AWS_REGION" --filters "Name=vpc-id,Values=${DESTROY_VPC_ID}" --query 'NetworkInterfaces[].{Id:NetworkInterfaceId,Status:Status,Description:Description,Type:InterfaceType}' --output table >> "$GITHUB_STEP_SUMMARY" 2>&1
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo '### GuardDuty-managed VPC endpoints' >> "$GITHUB_STEP_SUMMARY"
+            aws ec2 describe-vpc-endpoints --region "$AWS_REGION" --filters "Name=vpc-id,Values=${DESTROY_VPC_ID}" "Name=service-name,Values=com.amazonaws.${AWS_REGION}.guardduty-data" --query 'VpcEndpoints[].{Id:VpcEndpointId,State:State,Service:ServiceName}' --output table >> "$GITHUB_STEP_SUMMARY" 2>&1
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo '### GuardDuty-managed security groups' >> "$GITHUB_STEP_SUMMARY"
+            aws ec2 describe-security-groups --region "$AWS_REGION" --filters "Name=vpc-id,Values=${DESTROY_VPC_ID}" "Name=group-name,Values=GuardDutyManagedSecurityGroup-*" --query 'SecurityGroups[].{Id:GroupId,Name:GroupName}' --output table >> "$GITHUB_STEP_SUMMARY" 2>&1
+          else
+            echo 'VPC ID was not available for targeted ENI/GuardDuty checks.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo '### DNS records under the configured subdomain' >> "$GITHUB_STEP_SUMMARY"
+          zone_name="${TF_VAR_zone_name%.}."
+          hosted_zone_id="$(aws route53 list-hosted-zones-by-name --dns-name "$zone_name" --max-items 1 --query 'HostedZones[0].Id' --output text 2>/dev/null | sed 's#^/hostedzone/##')"
+          if [[ -n "$hosted_zone_id" && "$hosted_zone_id" != "None" ]]; then
+            suffix="${TF_VAR_subdomain}.${TF_VAR_zone_name%.}."
+            aws route53 list-resource-record-sets --hosted-zone-id "$hosted_zone_id" --output json 2>/dev/null | jq -r --arg suffix "$suffix" '[.ResourceRecordSets[] | select((.Name == $suffix) or (.Name | endswith("." + $suffix)))] | if length == 0 then "No matching records" else .[] | [.Name,.Type] | @tsv end' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Hosted zone ${zone_name} not found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo 'The bootstrap Terraform stack and ECR repositories are intentionally preserved.' >> "$GITHUB_STEP_SUMMARY"

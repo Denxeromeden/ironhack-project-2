@@ -1,10 +1,22 @@
 version: 2
 updates:
-  - package-ecosystem: "terraform"
+  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: "terraform"
+    directory: "/terraform/backend"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "terraform"
+    directory: "/terraform/bootstrap"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "terraform"
+    directory: "/terraform/infra"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "terraform"
+    directory: "/terraform/cluster-bootstrap"
     schedule:
       interval: "weekly"

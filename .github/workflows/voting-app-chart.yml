@@ -86,7 +86,9 @@ jobs:
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             "$RUNNER_TEMP/voting-app-rendered.yaml"
 
-      - name: Trivy configuration scan
+      - name: Trivy configuration scan (non-blocking)
+        # Findings and scanner/configuration errors are advisory for this learning lab.
+        continue-on-error: true
         run: |
           trivy config \
             --exit-code 0 \

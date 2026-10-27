@@ -337,10 +337,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker buildx inspect --bootstrap
-          driver="$(docker buildx inspect --format '{{.Driver}}')"
+          inspect_output="$(docker buildx inspect --bootstrap)"
+          printf '%s\n' "$inspect_output"
+          # `buildx inspect` does not support --format on all Buildx versions.
+          driver="$(printf '%s\n' "$inspect_output" | awk -F': *' '$1 == "Driver" { print $2; exit }')"
           if [[ "$driver" != "docker-container" ]]; then
-            echo "::error::Expected docker-container Buildx driver, got: $driver"
+            echo "::error::Expected docker-container Buildx driver, got: ${driver:-<not detected>}"
             exit 1
           fi
       - name: Build ARM64 image and save Docker archive

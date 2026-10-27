@@ -7,7 +7,7 @@ global:
 vote:
   # Bootstrap placeholder only. CI replaces this with the immutable git-SHA tag.
   image:
-    tag: a23ea86fc26efc6ec452b6ceadbd0b4668ba38a9
+    tag: fa76e13937d6cfef50ad5d43dc28abed8e7f9aad
   replicas: 2
   port: 80
   optionA: Cats
@@ -22,7 +22,7 @@ vote:
 result:
   # Bootstrap placeholder only. CI replaces this with the immutable git-SHA tag.
   image:
-    tag: a23ea86fc26efc6ec452b6ceadbd0b4668ba38a9
+    tag: fa76e13937d6cfef50ad5d43dc28abed8e7f9aad
   replicas: 2
   port: 80
   resources:
@@ -35,7 +35,7 @@ result:
 worker:
   # Bootstrap placeholder only. CI replaces this with the immutable git-SHA tag.
   image:
-    tag: a23ea86fc26efc6ec452b6ceadbd0b4668ba38a9
+    tag: fa76e13937d6cfef50ad5d43dc28abed8e7f9aad
   replicas: 2
   resources:
     requests:

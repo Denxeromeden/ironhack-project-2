@@ -14,8 +14,8 @@ on:
       - "terraform/infra/**"
       - "terraform/cluster-bootstrap/**"
       - "terraform/backend.conf"
-  #schedule:
-  #  - cron: "17 6 * * 1" #enable for prod
+  schedule:
+    - cron: "17 6 * * 1"
   workflow_dispatch:
     inputs:
       action:
@@ -37,9 +37,9 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
-      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
       TRIVY_VERSION: 0.76.1
-      TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+      TRIVY_CACHE_DIR: ${{ github.workspace }}/.ci-cache/trivy-cache
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,7 +51,7 @@ jobs:
       - name: Cache Terraform providers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/terraform-plugin-cache
+          path: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
           key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
           restore-keys: |
             terraform-providers-${{ runner.os }}-
@@ -103,7 +103,7 @@ jobs:
       - name: Cache Trivy database
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/trivy-cache
+          path: ${{ github.workspace }}/.ci-cache/trivy-cache
           key: trivy-${{ runner.os }}-${{ env.TRIVY_VERSION }}-terraform-${{ github.run_id }}
           restore-keys: trivy-${{ runner.os }}-${{ env.TRIVY_VERSION }}-
       - name: Validate Trivy exception policy
@@ -129,7 +129,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
-      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
       TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
       TF_VAR_env_tag: ${{ vars.ENV_TAG }}
       TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
@@ -149,7 +149,7 @@ jobs:
       - name: Cache Terraform providers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/terraform-plugin-cache
+          path: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
           key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
           restore-keys: |
             terraform-providers-${{ runner.os }}-
@@ -191,7 +191,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
-      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
       TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
       TF_VAR_env_tag: ${{ vars.ENV_TAG }}
       TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
@@ -212,7 +212,7 @@ jobs:
       - name: Cache Terraform providers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/terraform-plugin-cache
+          path: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
           key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
           restore-keys: |
             terraform-providers-${{ runner.os }}-
@@ -255,7 +255,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
-      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
       TF_VAR_unique_id: ${{ vars.UNIQUE_ID }}
       TF_VAR_env_tag: ${{ vars.ENV_TAG }}
       TF_VAR_zone_name: ${{ vars.ZONE_NAME }}
@@ -277,7 +277,7 @@ jobs:
       - name: Cache Terraform providers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/terraform-plugin-cache
+          path: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
           key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
           restore-keys: |
             terraform-providers-${{ runner.os }}-
@@ -335,7 +335,7 @@ jobs:
       - name: Cache Terraform providers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/terraform-plugin-cache
+          path: ${{ github.workspace }}/.ci-cache/terraform-plugin-cache
           key: terraform-providers-${{ runner.os }}-${{ hashFiles('terraform/**/.terraform.lock.hcl') }}
           restore-keys: |
             terraform-providers-${{ runner.os }}-

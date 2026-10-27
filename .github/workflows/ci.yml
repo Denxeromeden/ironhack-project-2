@@ -209,14 +209,14 @@ jobs:
       security-events: write
     env:
       TRIVY_VERSION: 0.76.1
-      TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+      TRIVY_CACHE_DIR: ${{ github.workspace }}/.ci-cache/trivy-cache
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Cache Trivy vulnerability database
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/trivy-cache
+          path: ${{ github.workspace }}/.ci-cache/trivy-cache
           key: trivy-${{ runner.os }}-${{ env.TRIVY_VERSION }}-fs-${{ github.run_id }}
           restore-keys: |
             trivy-${{ runner.os }}-${{ env.TRIVY_VERSION }}-
@@ -316,7 +316,7 @@ jobs:
       security-events: write
     env:
       TRIVY_VERSION: 0.76.1
-      TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+      TRIVY_CACHE_DIR: ${{ github.workspace }}/.ci-cache/trivy-cache
       SERVICES_JSON: ${{ needs.detect-changes.outputs.services }}
     steps:
       - name: Checkout
@@ -330,7 +330,7 @@ jobs:
       - name: Cache Trivy vulnerability database
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/trivy-cache
+          path: ${{ github.workspace }}/.ci-cache/trivy-cache
           key: trivy-${{ runner.os }}-${{ env.TRIVY_VERSION }}-image-${{ github.run_id }}
           restore-keys: |
             trivy-${{ runner.os }}-${{ env.TRIVY_VERSION }}-

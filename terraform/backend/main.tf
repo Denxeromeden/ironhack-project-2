@@ -1,7 +1,7 @@
 #Run once to initialize the bucket holding the remote states for bootstrap, infra and cluster-bootstrap. The account used 
 resource "aws_s3_bucket" "state" {
   bucket        = "ironhack-project-2-state-${var.unique_id}"
-  force_destroy = false
+  force_destroy = var.force_delete
 }
 
 #Enable versioning

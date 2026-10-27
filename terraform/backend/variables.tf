@@ -9,3 +9,9 @@ variable "unique_id" {
   description = "Unique id to attach to the created resources"
   default     = "dvd"
 }
+
+variable "force_delete" {
+  type        = bool
+  description = "Allow deletion of S3 bucket even if they contain files during teardown"
+  default     = true
+}

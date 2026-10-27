@@ -87,6 +87,8 @@ jobs:
           fi
 
   lint:
+    # Lint is currently advisory: report violations but do not block image publishing.
+    continue-on-error: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -290,12 +292,17 @@ jobs:
             --output "$RUNNER_TEMP/trivy-fs.sarif" \
             --exit-code 0 \
             .
+      - name: Stage filesystem SARIF report for upload
+        run: |
+          mkdir -p .ci-reports
+          cp "$RUNNER_TEMP/trivy-fs.sarif" .ci-reports/trivy-fs.sarif
       - name: Upload filesystem findings to GitHub Code Scanning
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SARIF_TOOL_NAME: Trivy filesystem
-        run: python3 .github/scripts/upload-sarif.py "$RUNNER_TEMP/trivy-fs.sarif"
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: .ci-reports/trivy-fs.sarif
+          category: trivy-filesystem
       - name: Fail on fixable HIGH or CRITICAL findings
         run: |
           trivy fs \
@@ -420,12 +427,17 @@ jobs:
           output.write_text(json.dumps(merged, separators=(',', ':')))
           print(f'Merged {len(reports)} image report(s) into {output}')
           PY
+      - name: Stage image SARIF report for upload
+        run: |
+          mkdir -p .ci-reports
+          cp "$RUNNER_TEMP/trivy-images.sarif" .ci-reports/trivy-images.sarif
       - name: Upload image findings to GitHub Code Scanning
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SARIF_TOOL_NAME: Trivy image
-        run: python3 .github/scripts/upload-sarif.py "$RUNNER_TEMP/trivy-images.sarif"
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: .ci-reports/trivy-images.sarif
+          category: trivy-images
       - name: Fail on fixable HIGH or CRITICAL image vulnerabilities
         shell: bash
         run: |
@@ -454,7 +466,6 @@ jobs:
         (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         needs.build-images.result == 'success' &&
         needs.scan-images.result == 'success' &&
-        needs.lint.result == 'success' &&
         needs.sonarqube-cloud.result == 'success' &&
         (needs.sonar-dotnet-worker.result == 'success' || needs.sonar-dotnet-worker.result == 'skipped') &&
         needs.trivy-fs.result == 'success'

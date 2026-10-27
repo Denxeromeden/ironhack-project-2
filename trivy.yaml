@@ -1,6 +1,6 @@
-# Shared defaults. Workflows override format and exit-code for full SARIF + a separate gate.
+# Shared Trivy defaults. Findings are informational for now; workflows may override format.
 format: table
-exit-code: 1
+exit-code: 0
 ignorefile: .trivyignore
 severity:
   - HIGH

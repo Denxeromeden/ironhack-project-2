@@ -215,12 +215,6 @@ jobs:
         run: |
           terraform plan -input=false -lock=false -no-color -out="$RUNNER_TEMP/infra.tfplan" > "$RUNNER_TEMP/terraform-plan-command.txt"
           terraform show -no-color "$RUNNER_TEMP/infra.tfplan" > "$RUNNER_TEMP/infra-plan.txt"
-      - name: Post plan diff as a PR comment
-        if: ${{ github.event_name == 'pull_request' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: python3 .github/scripts/post-plan-comment.py "$RUNNER_TEMP/infra-plan.txt"
       - name: Print plan summary for manual dispatch
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
